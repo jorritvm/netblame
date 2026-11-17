@@ -1,0 +1,71 @@
+# netblame configuration
+#
+# Every key is optional: anything you leave out falls back to the built-in
+# default. CLI arguments override this file.
+#
+# netblame looks for a config file in this order:
+#   1. --config PATH
+#   2. the NETBLAME_CONFIG environment variable
+#   3. config\netblame.yaml in the current working directory
+#   4. built-in defaults
+
+run:
+  duration: 2m            # how long to measure: 90, 90s, 2m, 1m30s, 15m, 1h ...
+  interval_s: 1.0         # seconds between pings (per target)
+  timeout_ms: 1000        # how long to wait for each reply
+  burst_min_samples: 2    # consecutive bad samples needed to report an incident
+
+# Targets, listed in path order from this PC outwards.
+#   kind: lan          -> a device inside your own network (your router, an AP)
+#         isp_gateway  -> the ISP's modem/gateway
+#         internet     -> a host on the internet
+# Targets of the same kind are treated as the same hop. With two internet
+# targets, netblame can tell "my line is bad" apart from "that one
+# destination is bad".
+# Optional per target: level (int) to override the hop order derived from kind.
+targets:
+  - name: ER605
+    host: 192.168.1.1
+    kind: lan
+  - name: Telenet HGW
+    host: 192.168.0.1
+    kind: isp_gateway
+  - name: Google DNS
+    host: 8.8.8.8
+    kind: internet
+  - name: Cloudflare DNS
+    host: 1.1.1.1
+    kind: internet
+
+# Thresholds per kind. Override only the keys you want to change.
+# A "bad sample" is a lost ping or a reply slower than spike_ms.
+thresholds:
+  lan:
+    loss_warn_pct: 0.5
+    loss_bad_pct: 2.0
+    p95_warn_ms: 20
+    p95_bad_ms: 50
+    jitter_warn_ms: 8
+    jitter_bad_ms: 20
+    spike_ms: 150
+  isp_gateway:
+    loss_warn_pct: 0.5
+    loss_bad_pct: 2.0
+    p95_warn_ms: 25
+    p95_bad_ms: 60
+    jitter_warn_ms: 8
+    jitter_bad_ms: 20
+    spike_ms: 150
+  internet:
+    loss_warn_pct: 1.0
+    loss_bad_pct: 3.0
+    p95_warn_ms: 60
+    p95_bad_ms: 150
+    jitter_warn_ms: 15
+    jitter_bad_ms: 40
+    spike_ms: 300
+
+# Optional LLM explanation (netblame --explain). Needs: pip install "netblame[llm]"
+# and the ANTHROPIC_API_KEY environment variable.
+llm:
+  model: claude-sonnet-5-5
