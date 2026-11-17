@@ -7,3 +7,4 @@ dist/
 venv/
 .env
 .idea/
+gemini_api_key.txt

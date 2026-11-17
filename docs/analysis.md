@@ -100,9 +100,10 @@ Extra hints:
 
 ## 6. `--explain`
 
-The LLM receives only the computed summary (`Analysis.to_dict()`: statistics,
-hop results, verdict, evidence, incidents), not the raw samples. It is
-instructed not to contradict the verdict. It explains the result in plain
-language and, for upstream problems, drafts a message to the ISP. If the
-package, API key or network is missing, the report is still printed. Only
-the explanation is skipped.
+netblame does not call any LLM. `--explain` builds a prompt from the computed
+summary (`Analysis.to_dict()`: statistics, hop results, verdict, evidence,
+incidents; no raw samples) plus instructions. The instructions tell the model
+how to read the data, not to contradict the verdict, and to draft an ISP message
+when the upstream network is blamed. The prompt is printed and copied to the
+clipboard (`clip`), or written to a file with `--explain-file`. Paste it into
+any LLM. The verdict never depends on it.

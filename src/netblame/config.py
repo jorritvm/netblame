@@ -76,7 +76,6 @@ class Settings:
     timeout_ms: int = 1000
     burst_min_samples: int = 2
     thresholds: dict[str, Thresholds] = field(default_factory=lambda: dict(DEFAULT_THRESHOLDS))
-    llm_model: str = "claude-sonnet-5-5"
     source: str = "built-in defaults"
 
 
@@ -166,7 +165,7 @@ def _as_dict(section: str, value: Any) -> dict[str, Any]:
 
 
 def settings_from_dict(data: dict[str, Any], source: str) -> Settings:
-    _check_keys("<root>", data, {"run", "targets", "thresholds", "llm"})
+    _check_keys("<root>", data, {"run", "targets", "thresholds"})
     settings = Settings(source=source)
     updates: dict[str, Any] = {}
 
@@ -211,11 +210,6 @@ def settings_from_dict(data: dict[str, Any], source: str) -> Settings:
         except (TypeError, ValueError) as exc:
             raise ConfigError(f"Invalid value in 'thresholds.{kind}': {exc}") from exc
     updates["thresholds"] = thresholds
-
-    llm = _as_dict("llm", data.get("llm"))
-    _check_keys("llm", llm, {"model"})
-    if "model" in llm:
-        updates["llm_model"] = str(llm["model"])
 
     return replace(settings, **updates)
 
@@ -284,7 +278,6 @@ def describe_settings(settings: Settings) -> str:
         f"Interval      : {settings.interval_s:g} s",
         f"Timeout       : {settings.timeout_ms} ms",
         f"Burst minimum : {settings.burst_min_samples} samples",
-        f"LLM model     : {settings.llm_model}",
         "Targets (path order):",
     ]
     for t in sorted(settings.targets, key=lambda t: t.level):

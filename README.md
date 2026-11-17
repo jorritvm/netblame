@@ -19,8 +19,9 @@ Verdict
 
 Because all targets are pinged at the same moments, netblame can tell a
 problem that *starts* at a hop apart from one that is just inherited from a
-closer hop. The analysis is deterministic Python. An LLM explanation is
-optional (`--explain`) and never changes the verdict.
+closer hop. The analysis is deterministic Python. No LLM or API key is needed.
+If you want a plain-language explanation or a draft message for your ISP,
+`--explain` gives you a ready-to-paste prompt for the LLM of your choice.
 
 Windows only (it uses the built-in `ping` command, so no admin rights are needed).
 
@@ -35,9 +36,6 @@ cd C:\dev\python\netblame
 
 # create .venv and install netblame into it (editable: code changes apply immediately)
 uv sync
-
-# or include the LLM extra for --explain
-uv sync --extra llm
 ```
 
 `uv sync` also writes a `uv.lock` with the exact dependency versions. Commit
@@ -47,7 +45,6 @@ Run it from the project folder, either through uv (no activation needed):
 
 ```powershell
 uv run netblame -d 5m
-uv run --extra llm netblame --explain
 ```
 
 or by activating the venv first:
@@ -70,7 +67,8 @@ netblame                      # run with config/defaults (2 minutes)
 netblame -d 5m                # measure for 5 minutes (90, 90s, 2m, 1m30s, 1h ...)
 netblame -d 15m -i 0.5        # longer window, 2 pings per second per target
 netblame --show-config        # print the effective settings and exit
-netblame --explain            # add a plain-language explanation from Claude
+netblame --explain            # also print an LLM prompt and copy it to the clipboard
+netblame --explain-file p.md  # write that prompt to a file instead
 ```
 
 Custom targets on the command line, in path order. They replace the configured ones:
@@ -90,8 +88,8 @@ Press **Ctrl+C** to stop early; netblame analyses what it has collected so far.
 | `-i, --interval SEC` | seconds between pings per target (default 1) |
 | `-w, --timeout MS` | reply timeout per ping (default 1000) |
 | `-t, --target NAME=HOST[:KIND]` | target, repeatable, path order |
-| `--explain` | LLM explanation (needs `netblame[llm]` + `ANTHROPIC_API_KEY`) |
-| `--model NAME` | model for `--explain` |
+| `--explain` | print a ready-to-paste LLM prompt and copy it to the clipboard |
+| `--explain-file PATH` | write that prompt to a file instead |
 | `--no-progress` | hide the live progress line |
 | `--show-config` | print effective settings and exit |
 
@@ -131,6 +129,26 @@ is bad, netblame reports a destination-specific problem instead of blaming your 
 How the verdict is reached, and why the thresholds are what they are, is
 explained in [docs/analysis.md](docs/analysis.md).
 
+## Getting an explanation from an LLM
+
+netblame never calls an LLM itself, so there are no API keys, costs or network
+dependencies (handy when the network is exactly what's broken). Instead:
+
+```powershell
+uv run netblame -d 5m --explain
+```
+
+After the report, netblame prints a self-contained prompt and copies it to the
+clipboard. Paste it into Claude, ChatGPT, Gemini or a local model. The prompt
+holds the computed summary (no raw samples) and asks the model to:
+
+- explain the numbers in plain language without contradicting the verdict
+- list the most useful next steps
+- for upstream problems, draft a short message for your ISP
+
+The summary contains your target names and private IPs; nothing else about
+your network or PC.
+
 ## Project layout
 
 ```
@@ -143,7 +161,7 @@ netblame/
 │   ├── pinger.py            parallel ping sampling (Windows ping via subprocess)
 │   ├── analysis.py          statistics, hop correlation, verdict
 │   ├── report.py            console report
-│   └── explain.py           optional LLM explanation
+│   └── explain.py           LLM prompt builder for --explain
 ├── pyproject.toml
 └── LICENSE                  MIT
 ```

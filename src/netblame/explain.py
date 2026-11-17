@@ -1,67 +1,64 @@
-"""Optional plain-language explanation of the analysis by an LLM.
+"""Build a ready-to-paste prompt for an LLM of your choice.
 
-The deterministic analysis is the source of truth; the model only gets the
-computed summary (no raw samples) and is told not to contradict the verdict.
+netblame does not call any LLM itself. ``--explain`` turns the analysis into
+a self-contained prompt that you paste into Claude, ChatGPT, Gemini, a local
+model, ... The deterministic analysis stays the source of truth: the prompt
+contains only the computed summary (no raw samples) and tells the model not
+to contradict the verdict.
 """
 
 from __future__ import annotations
 
 import json
-import os
+import subprocess
 from typing import Any
 
-SYSTEM_PROMPT = """\
-You explain the results of a home-network diagnostic tool called netblame.
-netblame pinged several hops in parallel (local router, ISP gateway, internet
-hosts) and a deterministic analysis already produced a verdict.
+INSTRUCTIONS = """\
+You are helping me understand the result of a home-network diagnostic tool
+called netblame. It pinged several hops of my network path at the same moments
+(local router, ISP gateway, internet hosts), and a deterministic analysis
+already produced a verdict. The full summary is in the JSON below.
 
-Rules:
-- Treat the verdict, evidence and notes as correct. Do not contradict them and
-  do not invent measurements that are not in the data.
-- Write for a technically capable user. Be concise: at most ~200 words of
-  explanation, in short paragraphs or a few bullets.
-- Explain what the numbers mean, why the verdict follows from them, and the
-  2-4 most useful next steps.
-- If the verdict points at the ISP line / upstream network, finish with a short
-  draft message (max ~120 words) the user can send to their ISP, quoting the
-  key numbers.
-- Plain text only, no markdown headings.
+How to read the data:
+- "level" is the hop order from my PC outwards (1 = local network, 2 = ISP
+  gateway, 3 = internet). Targets with the same level are the same hop.
+- A "bad sample" is a lost ping or a reply slower than the spike limit.
+- "bad_while_closer_hops_healthy" counts problems that START at that hop;
+  "bad_while_closer_hops_also_bad" counts problems inherited from closer hops.
+
+Please:
+1. Treat the verdict, evidence and notes as correct. Do not contradict them
+   and do not invent measurements that are not in the data.
+2. Explain in plain language (at most ~200 words) what the numbers mean and
+   why the verdict follows from them.
+3. Give the 2-4 most useful next steps for my situation.
+4. If the verdict points at the ISP line / upstream network, finish with a
+   short draft message (max ~120 words) I can send to my ISP, quoting the key
+   numbers (loss %, latency, that it was measured with closer hops healthy).
 """
 
 
-class ExplainError(RuntimeError):
-    """Raised when the LLM explanation cannot be produced."""
+def build_prompt(summary: dict[str, Any]) -> str:
+    """Return the complete prompt: instructions followed by the JSON summary."""
+    return (
+        INSTRUCTIONS
+        + "\nnetblame summary (JSON):\n```json\n"
+        + json.dumps(summary, indent=2, ensure_ascii=False)
+        + "\n```\n"
+    )
 
 
-def explain(summary: dict[str, Any], model: str) -> str:
+def copy_to_clipboard(text: str) -> bool:
+    """Copy text to the Windows clipboard with ``clip``. Returns True on success."""
     try:
-        import anthropic
-    except ImportError as exc:
-        raise ExplainError(
-            'The anthropic package is not installed. Install it with: pip install "netblame[llm]"'
-        ) from exc
-
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise ExplainError("Set the ANTHROPIC_API_KEY environment variable to use --explain.")
-
-    client = anthropic.Anthropic(timeout=60.0, max_retries=2)
-    try:
-        message = client.messages.create(
-            model=model,
-            max_tokens=1200,
-            system=SYSTEM_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": "netblame analysis summary (JSON):\n"
-                    + json.dumps(summary, indent=2, ensure_ascii=False),
-                }
-            ],
+        # clip.exe reads UTF-16 LE correctly when the BOM is present.
+        subprocess.run(
+            ["clip"],
+            input=text.encode("utf-16"),
+            check=True,
+            timeout=10,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-    except anthropic.APIError as exc:
-        raise ExplainError(f"LLM request failed: {exc}") from exc
-
-    text = "".join(block.text for block in message.content if block.type == "text").strip()
-    if not text:
-        raise ExplainError("The model returned an empty explanation.")
-    return text
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return True

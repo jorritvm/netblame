@@ -64,8 +64,3 @@ thresholds:
     jitter_warn_ms: 15
     jitter_bad_ms: 40
     spike_ms: 300
-
-# Optional LLM explanation (netblame --explain). Needs: pip install "netblame[llm]"
-# and the ANTHROPIC_API_KEY environment variable.
-llm:
-  model: claude-sonnet-5-5

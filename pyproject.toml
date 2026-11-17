@@ -22,11 +22,6 @@ dependencies = [
     "PyYAML>=6.0",
 ]
 
-[project.optional-dependencies]
-llm = [
-    "anthropic>=0.40",
-]
-
 [project.scripts]
 netblame = "netblame.cli:main"
 

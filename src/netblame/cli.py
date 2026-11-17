@@ -44,7 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
               netblame -t ER605=192.168.1.1:lan -t HGW=192.168.0.1:isp_gateway \\
                        -t Google=8.8.8.8        custom targets (replace the config's)
               netblame --show-config            print the effective settings
-              netblame --explain                add an LLM explanation (netblame[llm])
+              netblame --explain                also print an LLM prompt (copied to clipboard)
+              netblame --explain-file prompt.md write that prompt to a file
 
             exit codes: 0 healthy, 1 problem found, 2 error, 130 stopped before any data
             """
@@ -65,9 +66,10 @@ def build_parser() -> argparse.ArgumentParser:
                              "isp_gateway or internet (default internet). Replaces the "
                              "configured targets.")
     parser.add_argument("--explain", action="store_true",
-                        help="add a plain-language explanation from Claude "
-                             "(needs netblame[llm] and ANTHROPIC_API_KEY)")
-    parser.add_argument("--model", help="model for --explain (overrides config)")
+                        help="after the report, print a ready-to-paste prompt for the "
+                             "LLM of your choice and copy it to the clipboard")
+    parser.add_argument("--explain-file", metavar="PATH",
+                        help="write that prompt to a file instead of printing it")
     parser.add_argument("--no-progress", action="store_true",
                         help="do not show the live progress line")
     parser.add_argument("--show-config", action="store_true",
@@ -86,8 +88,6 @@ def apply_overrides(settings: Settings, args: argparse.Namespace) -> Settings:
         updates["timeout_ms"] = args.timeout
     if args.target:
         updates["targets"] = tuple(parse_target_spec(spec) for spec in args.target)
-    if args.model:
-        updates["llm_model"] = args.model
     return replace(settings, **updates) if updates else settings
 
 
@@ -166,19 +166,25 @@ def main(argv: list[str] | None = None) -> int:
     analysis = analyse(session, settings)
     print(render_report(analysis))
 
-    if args.explain:
-        from .explain import ExplainError, explain
+    if args.explain or args.explain_file:
+        from .explain import build_prompt, copy_to_clipboard
 
-        print("\nAsking Claude for an explanation...")
-        try:
-            text = explain(analysis.to_dict(), settings.llm_model)
-        except ExplainError as exc:
-            print(f"  (explanation unavailable: {exc})")
+        prompt = build_prompt(analysis.to_dict())
+        if args.explain_file:
+            try:
+                with open(args.explain_file, "w", encoding="utf-8", newline="\n") as fh:
+                    fh.write(prompt)
+            except OSError as exc:
+                _err(f"could not write {args.explain_file}: {exc}")
+            else:
+                print(f"\nLLM prompt written to {args.explain_file}")
         else:
-            print("\nExplanation (LLM, based on the analysis above)")
-            print("-" * 46)
-            for paragraph in text.splitlines():
-                print(textwrap.fill(paragraph, width=WIDTH) if paragraph.strip() else "")
+            copied = copy_to_clipboard(prompt)
+            title = "LLM prompt (paste into Claude, ChatGPT, Gemini, ...)"
+            print(f"\n{title}\n{'-' * len(title)}")
+            print(prompt.rstrip())
+            print("-" * len(title))
+            print("Copied to the clipboard." if copied else "(Could not copy to the clipboard; copy it from above.)")
 
     return EXIT_PROBLEM if analysis.blamed else EXIT_OK
 
